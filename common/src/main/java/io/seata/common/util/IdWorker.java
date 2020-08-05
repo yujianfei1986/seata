@@ -106,11 +106,12 @@ public class IdWorker {
             sequence = (sequence + 1) & sequenceMask;
             if (sequence == 0) {
                 timestamp = tilNextMillis(lastTimestamp);
+                lastTimestamp = timestamp;
             }
         } else {
             sequence = 0L;
+            lastTimestamp = timestamp;
         }
-        lastTimestamp = timestamp;
 
         return ((timestamp - twepoch) << timestampLeftShift) | (workerId << workerIdShift) | sequence;
     }
