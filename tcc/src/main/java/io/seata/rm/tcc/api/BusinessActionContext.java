@@ -15,7 +15,17 @@
  */
 package io.seata.rm.tcc.api;
 
+import com.alibaba.fastjson.JSON;
+import io.seata.common.Constants;
+import io.seata.core.exception.TransactionException;
+import io.seata.core.model.BranchStatus;
+import io.seata.core.model.BranchType;
+import io.seata.rm.DefaultResourceManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -23,7 +33,11 @@ import java.util.Map;
  */
 public class BusinessActionContext implements Serializable {
 
+    private final static Logger LOGGER = LoggerFactory.getLogger(BusinessActionContext.class);
+
     private static final long serialVersionUID = 6539226288677737991L;
+
+    private static ThreadLocal<Map<String, Object>> tccContextMap = new ThreadLocal<>();
 
     private String xid;
 
@@ -32,6 +46,8 @@ public class BusinessActionContext implements Serializable {
     private String actionName;
 
     private Map<String, Object> actionContext;
+
+    private static boolean delayed;
 
     /**
      * Instantiates a new Business action context.
@@ -50,6 +66,39 @@ public class BusinessActionContext implements Serializable {
         this.xid = xid;
         this.branchId = branchId;
         this.setActionContext(actionContext);
+    }
+
+    public static boolean isDelayed() {
+        return delayed;
+    }
+
+    public static void setDelayed(boolean delayed) {
+        BusinessActionContext.delayed = delayed;
+    }
+
+
+
+    public void addActionContext(Map<String, Object> dataMap) {
+        Map<String, Object> map = new HashMap<>(dataMap);
+        if (delayed) {
+            tccContextMap.set(map);
+        } else {
+            Map<String, Object> applicationContext = new HashMap<>(4);
+            applicationContext.put(Constants.TCC_ACTION_CONTEXT, tccContextMap.get());
+            try {
+                DefaultResourceManager.get().branchReport(BranchType.TCC, xid, Long.parseLong(branchId),
+                        BranchStatus.PhaseOne_Done, JSON.toJSONString(applicationContext));
+            } catch (TransactionException e) {
+                String msg = String.format("TCC branch Report error, xid: %s", xid);
+                LOGGER.error(msg, e);
+            } finally {
+                tccContextMap.remove();
+            }
+        }
+    }
+
+    public Map<String, Object> getTccContextMap() {
+        return tccContextMap.get();
     }
 
     /**

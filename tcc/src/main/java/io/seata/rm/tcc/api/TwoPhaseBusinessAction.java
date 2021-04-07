@@ -56,4 +56,11 @@ public @interface TwoPhaseBusinessAction {
      * @return the string
      */
     String rollbackMethod() default "rollback";
+
+    /**
+     * if delay to branchReport
+     *
+     * @return true/false
+     */
+    boolean delay() default true;
 }

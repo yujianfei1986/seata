@@ -20,6 +20,8 @@ import io.seata.common.Constants;
 import io.seata.common.exception.FrameworkException;
 import io.seata.common.executor.Callback;
 import io.seata.common.util.NetUtil;
+import io.seata.core.exception.TransactionException;
+import io.seata.core.model.BranchStatus;
 import io.seata.core.model.BranchType;
 import io.seata.rm.DefaultResourceManager;
 import io.seata.rm.tcc.api.BusinessActionContext;
@@ -82,6 +84,18 @@ public class ActionInterceptorHandler {
         ret.put(Constants.TCC_METHOD_ARGUMENTS, arguments);
         //the final result
         ret.put(Constants.TCC_METHOD_RESULT, targetCallback.execute());
+        if (BusinessActionContext.isDelayed()) {
+            // share the params of tcc phase 1 to phase 2
+            Map<String, Object> applicationContext = new HashMap<>(4);
+            applicationContext.put(Constants.TCC_ACTION_CONTEXT, actionContext.getTccContextMap());
+            try {
+                DefaultResourceManager.get().branchReport(BranchType.TCC, xid, Long.parseLong(branchId),
+                        BranchStatus.PhaseOne_Done, JSON.toJSONString(applicationContext));
+            } catch (TransactionException e) {
+                String msg = String.format("TCC branch Report error, xid: %s", xid);
+                LOGGER.error(msg, e);
+            }
+        }
         return ret;
     }
 
